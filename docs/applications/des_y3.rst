@@ -75,6 +75,9 @@ After running this selection response calculation, we are ready to drop all gala
 
 .. code-block:: python
 
+    from dsigma.helpers import dsigma_table
+    from dsigma.surveys import des
+
     table_s = Table.read('des_y3.hdf5', path='catalog')
     table_s = dsigma_table(table_s, 'source', survey='DES')
 
