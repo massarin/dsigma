@@ -50,8 +50,18 @@ def default_column_keys(version=default_version):
             "ra": "RA_IMG",
             "dec": "DEC_IMG",
             "z": "z_true",
-            "e_1": "GAMMA1",
-            "e_2": "GAMMA2",
+            "e_1": "E1",
+            "e_2": "E2",
+            "w": 1,
+            "w_sys": 1,
+        }
+    elif version == "HAGN_photometry":
+        keys = {
+            "ra": "RA_IMG",
+            "dec": "DEC_IMG",
+            "z": "ZMED_euc",
+            "e_1": "E1",
+            "e_2": "E2",
             "w": 1,
             "w_sys": 1,
         }
