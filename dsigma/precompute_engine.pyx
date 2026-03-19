@@ -93,6 +93,8 @@ def precompute_engine(
     cdef double[::1] sum_w_ls = table_r['sum w_ls']
     cdef double[::1] sum_w_ls_e_t = table_r['sum w_ls e_t']
     cdef double[::1] sum_w_ls_e_t_sigma_crit = table_r['sum w_ls e_t sigma_crit']
+    cdef double[::1] sum_w_ls_e_x = table_r['sum w_ls e_x']
+    cdef double[::1] sum_w_ls_e_x_sigma_crit = table_r['sum w_ls e_x sigma_crit']
     cdef double[::1] sum_w_ls_sigma_crit = table_r['sum w_ls sigma_crit']
     cdef double[::1] sum_w_ls_z_s = table_r['sum w_ls z_s']
     cdef double[::1] sum_w_ls_m
@@ -125,7 +127,7 @@ def precompute_engine(
     cdef long offset_bin, offset_result
     cdef double dist_3d_sq_max, dist_3d_sq_ls
     cdef double sin_ra_l_minus_ra_s, cos_ra_l_minus_ra_s
-    cdef double sin_2phi, cos_2phi, tan_phi, tan_phi_num, tan_phi_den, e_t
+    cdef double sin_2phi, cos_2phi, tan_phi, tan_phi_num, tan_phi_den, e_t, e_x
     cdef double w_ls, sigma_crit
     cdef double max_pixrad = 1.05 * hp.pixel_resolution.to(u.deg).value
     cdef double inf = float('inf'), summand
@@ -242,6 +244,7 @@ def precompute_engine(
                         sin_2phi = 2.0 * tan_phi / (1.0 + tan_phi * tan_phi)
 
                     e_t = - e_1[i_s] * cos_2phi + e_2[i_s] * sin_2phi
+                    e_x =   e_1[i_s] * sin_2phi + e_2[i_s] * cos_2phi
 
                     sum_1[offset_result + i_bin] += 1
                     summand = w_ls
@@ -250,6 +253,8 @@ def precompute_engine(
                     sum_w_ls_e_t[offset_result + i_bin] += summand
                     summand *= sigma_crit
                     sum_w_ls_e_t_sigma_crit[offset_result + i_bin] += summand
+                    sum_w_ls_e_x[offset_result + i_bin] += w_ls * e_x
+                    sum_w_ls_e_x_sigma_crit[offset_result + i_bin] += w_ls * e_x * sigma_crit
                     sum_w_ls_z_s[offset_result + i_bin] += w_ls * z_s[i_s]
                     sum_w_ls_sigma_crit[offset_result + i_bin] += w_ls * sigma_crit
                     if has_m:

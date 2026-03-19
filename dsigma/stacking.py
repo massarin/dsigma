@@ -9,13 +9,14 @@ from astropy.units import UnitConversionError
 
 from .physics import mpc_per_degree, lens_magnification_shear_bias
 
-__all__ = ['number_of_pairs', 'raw_tangential_shear',
-           'raw_excess_surface_density', 'photo_z_dilution_factor',
-           'boost_factor', 'scalar_shear_response_factor',
-           'matrix_shear_response_factor', 'shear_responsivity_factor',
-           'mean_lens_redshift', 'mean_source_redshift',
-           'mean_critical_surface_density', 'lens_magnification_bias',
-           'tangential_shear', 'excess_surface_density']
+__all__ = ['number_of_pairs', 'raw_tangential_shear', 'raw_cross_shear',
+           'raw_excess_surface_density', 'raw_cross_surface_density',
+           'photo_z_dilution_factor', 'boost_factor',
+           'scalar_shear_response_factor', 'matrix_shear_response_factor',
+           'shear_responsivity_factor', 'mean_lens_redshift',
+           'mean_source_redshift', 'mean_critical_surface_density',
+           'lens_magnification_bias', 'tangential_shear',
+           'excess_surface_density']
 
 
 def number_of_pairs(table_l):
@@ -70,6 +71,46 @@ def raw_excess_surface_density(table_l):
 
     """
     return (np.sum(table_l['sum w_ls e_t sigma_crit'].data *
+                   table_l['w_sys'].data[:, None], axis=0) /
+            np.sum(table_l['sum w_ls'].data *
+                   table_l['w_sys'].data[:, None], axis=0))
+
+
+def raw_cross_shear(table_l):
+    """Compute the average cross shear for a catalog.
+
+    Parameters
+    ----------
+    table_l : astropy.table.Table
+        Precompute results for the lenses.
+
+    Returns
+    -------
+    gamma_x : numpy.ndarray
+        The raw, uncorrected cross shear in each radial bin.
+
+    """
+    return (np.sum(table_l['sum w_ls e_x'].data *
+                   table_l['w_sys'].data[:, None], axis=0) /
+            np.sum(table_l['sum w_ls'].data * table_l['w_sys'].data[:, None],
+                   axis=0))
+
+
+def raw_cross_surface_density(table_l):
+    """Compute the raw, uncorrected cross surface density for a catalog.
+
+    Parameters
+    ----------
+    table_l : astropy.table.Table
+        Precompute results for the lenses.
+
+    Returns
+    -------
+    delta_sigma_x : numpy.ndarray
+        The raw, uncorrected cross surface density in each radial bin.
+
+    """
+    return (np.sum(table_l['sum w_ls e_x sigma_crit'].data *
                    table_l['w_sys'].data[:, None], axis=0) /
             np.sum(table_l['sum w_ls'].data *
                    table_l['w_sys'].data[:, None], axis=0))
@@ -321,7 +362,8 @@ def tangential_shear(table_l, table_r=None, boost_correction=False,
                      matrix_shear_response_correction=False,
                      shear_responsivity_correction=False,
                      selection_bias_correction=False,
-                     random_subtraction=False, return_table=False):
+                     random_subtraction=False, return_table=False,
+                     component='tangential', include_cross=False):
     """Compute the mean tangential shear with corrections, if applicable.
 
     Parameters
@@ -367,14 +409,20 @@ def tangential_shear(table_l, table_r=None, boost_correction=False,
         catalog is provided.
 
     """
+    raw_fn = raw_tangential_shear if component == 'tangential' else raw_cross_shear
+    key = 'et' if component == 'tangential' else 'ex'
+
     result = Table()
 
     result['rp_min'] = table_l.meta['bins'][:-1]
     result['rp_max'] = table_l.meta['bins'][1:]
     result['n_pairs'] = number_of_pairs(table_l)
     result['rp'] = np.sqrt(result['rp_min'] * result['rp_max'])
-    result['et_raw'] = raw_tangential_shear(table_l)
-    result['et'] = raw_tangential_shear(table_l)
+    result[f'{key}_raw'] = raw_fn(table_l)
+    result[key] = raw_fn(table_l)
+    if include_cross:
+        result['ex_raw'] = raw_cross_shear(table_l)
+        result['ex'] = raw_cross_shear(table_l)
     result['z_l'] = mean_lens_redshift(table_l)
     result['z_s'] = mean_source_redshift(table_l)
 
@@ -383,40 +431,61 @@ def tangential_shear(table_l, table_r=None, boost_correction=False,
             raise ValueError('Cannot compute boost factor correction without' +
                              ' results from a random catalog.')
         result['b'] = boost_factor(table_l, table_r)
-        result['et'] *= result['b']
+        result[key] *= result['b']
+        if include_cross:
+            result['ex'] *= result['b']
 
     if scalar_shear_response_correction:
         result['1+m'] = 1 + scalar_shear_response_factor(table_l)
-        result['et'] /= result['1+m']
+        result[key] /= result['1+m']
+        if include_cross:
+            result['ex'] /= result['1+m']
 
     if matrix_shear_response_correction:
         result['R_t'] = matrix_shear_response_factor(table_l)
-        result['et'] /= result['R_t']
+        result[key] /= result['R_t']
+        if include_cross:
+            result['ex'] /= result['R_t']
 
     if shear_responsivity_correction:
         result['2R'] = 2 * shear_responsivity_factor(table_l)
-        result['et'] /= result['2R']
+        result[key] /= result['2R']
+        if include_cross:
+            result['ex'] /= result['2R']
 
     if selection_bias_correction:
         result['1+m_sel'] = 1 + scalar_shear_response_factor(
             table_l, selection_bias=True)
-        result['et'] /= result['1+m_sel']
+        result[key] /= result['1+m_sel']
+        if include_cross:
+            result['ex'] /= result['1+m_sel']
 
     if random_subtraction:
         if table_r is None:
             raise ValueError('Cannot subtract random results without ' +
                              'results from a random catalog.')
-        result['et_r'] = tangential_shear(
+        result[f'{key}_r'] = tangential_shear(
             table_r, boost_correction=False,
             scalar_shear_response_correction=scalar_shear_response_correction,
             matrix_shear_response_correction=matrix_shear_response_correction,
             shear_responsivity_correction=shear_responsivity_correction,
             selection_bias_correction=selection_bias_correction,
-            random_subtraction=False, return_table=False)
-        result['et'] -= result['et_r']
+            random_subtraction=False, return_table=False,
+            component=component)
+        result[key] -= result[f'{key}_r']
+        if include_cross:
+            result['ex_r'] = tangential_shear(
+                table_r, boost_correction=False,
+                scalar_shear_response_correction=scalar_shear_response_correction,
+                matrix_shear_response_correction=matrix_shear_response_correction,
+                shear_responsivity_correction=shear_responsivity_correction,
+                selection_bias_correction=selection_bias_correction,
+                random_subtraction=False, return_table=False,
+                component='cross')
+            result['ex'] -= result['ex_r']
 
     if not return_table:
-        return result['et'].data
+        return result[key].data
 
     return result
 
@@ -429,7 +498,9 @@ def excess_surface_density(table_l, table_r=None,
                            shear_responsivity_correction=False,
                            selection_bias_correction=False,
                            random_subtraction=False,
-                           return_table=False):
+                           return_table=False,
+                           component='tangential', include_cross=False,
+                           include_shear=False):
     """Compute the mean excess surface density with corrections, if applicable.
 
     Parameters
@@ -479,14 +550,27 @@ def excess_surface_density(table_l, table_r=None,
         catalog is provided.
 
     """
+    raw_fn = (raw_excess_surface_density if component == 'tangential'
+              else raw_cross_surface_density)
+    key = 'ds' if component == 'tangential' else 'dsx'
+
     result = Table()
 
     result['rp_min'] = table_l.meta['bins'][:-1]
     result['rp_max'] = table_l.meta['bins'][1:]
     result['n_pairs'] = number_of_pairs(table_l)
     result['rp'] = np.sqrt(result['rp_min'] * result['rp_max'])
-    result['ds_raw'] = raw_excess_surface_density(table_l)
-    result['ds'] = raw_excess_surface_density(table_l)
+    result[f'{key}_raw'] = raw_fn(table_l)
+    result[key] = raw_fn(table_l)
+    if include_cross:
+        result['dsx_raw'] = raw_cross_surface_density(table_l)
+        result['dsx'] = raw_cross_surface_density(table_l)
+    if include_shear:
+        result['et_raw'] = raw_tangential_shear(table_l)
+        result['et'] = raw_tangential_shear(table_l)
+        if include_cross:
+            result['ex_raw'] = raw_cross_shear(table_l)
+            result['ex'] = raw_cross_shear(table_l)
     result['z_l'] = mean_lens_redshift(table_l)
     result['z_s'] = mean_source_redshift(table_l)
 
@@ -495,44 +579,109 @@ def excess_surface_density(table_l, table_r=None,
             raise ValueError('Cannot compute boost factor correction without' +
                              ' results from a random catalog.')
         result['b'] = boost_factor(table_l, table_r)
-        result['ds'] *= result['b']
+        result[key] *= result['b']
+        if include_cross:
+            result['dsx'] *= result['b']
+        if include_shear:
+            result['et'] *= result['b']
+            if include_cross:
+                result['ex'] *= result['b']
 
     if scalar_shear_response_correction:
         result['1+m'] = 1 + scalar_shear_response_factor(table_l)
-        result['ds'] /= result['1+m']
+        result[key] /= result['1+m']
+        if include_cross:
+            result['dsx'] /= result['1+m']
+        if include_shear:
+            result['et'] /= result['1+m']
+            if include_cross:
+                result['ex'] /= result['1+m']
 
     if matrix_shear_response_correction:
         result['R_t'] = matrix_shear_response_factor(table_l)
-        result['ds'] /= result['R_t']
+        result[key] /= result['R_t']
+        if include_cross:
+            result['dsx'] /= result['R_t']
+        if include_shear:
+            result['et'] /= result['R_t']
+            if include_cross:
+                result['ex'] /= result['R_t']
 
     if shear_responsivity_correction:
         result['2R'] = 2 * shear_responsivity_factor(table_l)
-        result['ds'] /= result['2R']
+        result[key] /= result['2R']
+        if include_cross:
+            result['dsx'] /= result['2R']
+        if include_shear:
+            result['et'] /= result['2R']
+            if include_cross:
+                result['ex'] /= result['2R']
 
     if selection_bias_correction:
         result['1+m_sel'] = 1 + scalar_shear_response_factor(
             table_l, selection_bias=True)
-        result['ds'] /= result['1+m_sel']
+        result[key] /= result['1+m_sel']
+        if include_cross:
+            result['dsx'] /= result['1+m_sel']
+        if include_shear:
+            result['et'] /= result['1+m_sel']
+            if include_cross:
+                result['ex'] /= result['1+m_sel']
 
     if photo_z_dilution_correction:
         result['f_bias'] = photo_z_dilution_factor(table_l)
-        result['ds'] *= result['f_bias']
+        result[key] *= result['f_bias']
+        if include_cross:
+            result['dsx'] *= result['f_bias']
 
     if random_subtraction:
         if table_r is None:
             raise ValueError('Cannot subtract random results without ' +
                              'results from a random catalog.')
-        result['ds_r'] = excess_surface_density(
+        result[f'{key}_r'] = excess_surface_density(
             table_r, photo_z_dilution_correction=photo_z_dilution_correction,
             boost_correction=False,
             scalar_shear_response_correction=scalar_shear_response_correction,
             matrix_shear_response_correction=matrix_shear_response_correction,
             shear_responsivity_correction=shear_responsivity_correction,
             selection_bias_correction=selection_bias_correction,
-            random_subtraction=False, return_table=False)
-        result['ds'] -= result['ds_r']
+            random_subtraction=False, return_table=False,
+            component=component)
+        result[key] -= result[f'{key}_r']
+        if include_cross:
+            result['dsx_r'] = excess_surface_density(
+                table_r,
+                photo_z_dilution_correction=photo_z_dilution_correction,
+                boost_correction=False,
+                scalar_shear_response_correction=scalar_shear_response_correction,
+                matrix_shear_response_correction=matrix_shear_response_correction,
+                shear_responsivity_correction=shear_responsivity_correction,
+                selection_bias_correction=selection_bias_correction,
+                random_subtraction=False, return_table=False,
+                component='cross')
+            result['dsx'] -= result['dsx_r']
+        if include_shear:
+            result['et_r'] = tangential_shear(
+                table_r, boost_correction=False,
+                scalar_shear_response_correction=scalar_shear_response_correction,
+                matrix_shear_response_correction=matrix_shear_response_correction,
+                shear_responsivity_correction=shear_responsivity_correction,
+                selection_bias_correction=selection_bias_correction,
+                random_subtraction=False, return_table=False,
+                component='tangential')
+            result['et'] -= result['et_r']
+            if include_cross:
+                result['ex_r'] = tangential_shear(
+                    table_r, boost_correction=False,
+                    scalar_shear_response_correction=scalar_shear_response_correction,
+                    matrix_shear_response_correction=matrix_shear_response_correction,
+                    shear_responsivity_correction=shear_responsivity_correction,
+                    selection_bias_correction=selection_bias_correction,
+                    random_subtraction=False, return_table=False,
+                    component='cross')
+                result['ex'] -= result['ex_r']
 
     if not return_table:
-        return result['ds'].data
+        return result[key].data
 
     return result

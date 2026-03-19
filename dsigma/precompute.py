@@ -394,8 +394,9 @@ def precompute(
     table_engine_r = {}
     n_results = len(table_l) * (len(bins) - 1)
 
-    key_list = ['sum 1', 'sum w_ls', 'sum w_ls e_t', 'sum w_ls z_s',
-                'sum w_ls e_t sigma_crit', 'sum w_ls sigma_crit']
+    key_list = ['sum 1', 'sum w_ls', 'sum w_ls e_t', 'sum w_ls e_x',
+                'sum w_ls z_s', 'sum w_ls e_t sigma_crit',
+                'sum w_ls e_x sigma_crit', 'sum w_ls sigma_crit']
 
     if 'm' in table_s.colnames:
         key_list.append('sum w_ls m')
