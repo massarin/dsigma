@@ -13,7 +13,7 @@ __all__ = [
 ]
 
 default_version = "HAGN"
-known_versions = ["flagship", "HAGN"]
+known_versions = ["flagship", "HAGN", "HAGN_photometry", "general"]
 e_2_convention = "standard"
 
 
@@ -59,9 +59,19 @@ def default_column_keys(version=default_version):
         keys = {
             "ra": "RA_IMG",
             "dec": "DEC_IMG",
-            "z": "ZMED_euc",
-            "e_1": "E1",
-            "e_2": "E2",
+            "z": "z_true",
+            "e_1": "GAMMA1",
+            "e_2": "GAMMA2",
+            "w": 1,
+            "w_sys": 1,
+        }
+    elif version == "general":
+        keys = {
+            "ra": "ra",
+            "dec": "dec",
+            "z": "z",
+            "e_1": "e_1",
+            "e_2": "e_2",
             "w": 1,
             "w_sys": 1,
         }
