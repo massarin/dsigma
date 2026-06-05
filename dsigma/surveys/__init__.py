@@ -1,3 +1,3 @@
-from . import cfhtls, des, euclid, hsc, kids, simulations
+from . import euclid, simulations
 
-__all__ = ["cfhtls", "des", "hsc", "kids", "euclid", "simulations"]
+__all__ = ["euclid", "simulations"]

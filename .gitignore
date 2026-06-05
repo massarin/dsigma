@@ -3,7 +3,6 @@ __pycache__
 *.pyc
 *.so
 docs/_build
-MANIFEST
 build
 dist
 dsigma.egg-info/
@@ -11,4 +10,5 @@ dsigma/precompute_engine.c
 tutorial/*
 !tutorial/*.py
 !tutorial/*.csv
+!tutorial/*.ecsv
 *.ipynb_checkpoints
