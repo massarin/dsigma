@@ -15,6 +15,9 @@ from .helpers import in_degrees, interpolate_over_redshift
 from .physics import critical_surface_density, effective_critical_surface_density
 from .precompute_engine import precompute_engine
 
+
+# source engine of the last table_s, reused while the same object is passed again (lens chunking)
+_SOURCE_CACHE = {}
 __all__ = ['mean_photo_z_offset', 'photo_z_dilution_factor', 'precompute']
 
 
@@ -263,53 +266,61 @@ def precompute(
 
     pix_l = hp.lonlat_to_healpix(in_degrees(table_l['ra'].quantity),
                                  in_degrees(table_l['dec'].quantity))
-    pix_s = hp.lonlat_to_healpix(in_degrees(table_s['ra'].quantity),
-                                 in_degrees(table_s['dec'].quantity))
     argsort_pix_l = np.argsort(pix_l)
-    argsort_pix_s = np.argsort(pix_s)
     pix_l, n_pix_l = np.unique(pix_l, return_counts=True)
     pix_l = np.ascontiguousarray(pix_l)
     n_pix_l = np.ascontiguousarray(np.cumsum(n_pix_l))
-    pix_s, n_pix_s = np.unique(pix_s, return_counts=True)
-    pix_s = np.ascontiguousarray(pix_s)
-    n_pix_s = np.ascontiguousarray(np.cumsum(n_pix_s))
+
+    # the cache holds table_s itself, so its id cannot be recycled by another table
+    source_key = (nside, comoving, cosmology, n_jobs > 1)
+    cached = (table_n is None and _SOURCE_CACHE.get('table_s') is table_s
+              and _SOURCE_CACHE['key'] == source_key)
+    if cached:
+        pix_s, n_pix_s, table_engine_s = _SOURCE_CACHE['engine']
+    else:
+        pix_s = hp.lonlat_to_healpix(in_degrees(table_s['ra'].quantity),
+                                     in_degrees(table_s['dec'].quantity))
+        argsort_pix_s = np.argsort(pix_s)
+        pix_s, n_pix_s = np.unique(pix_s, return_counts=True)
+        pix_s = np.ascontiguousarray(pix_s)
+        n_pix_s = np.ascontiguousarray(np.cumsum(n_pix_s))
+        table_engine_s = {}
 
     table_engine_l = {}
-    table_engine_s = {}
 
     table_engine_l['z'] = np.ascontiguousarray(
         table_l['z'][argsort_pix_l], dtype=np.float64)
 
     for f, f_name in zip([np.sin, np.cos], ['sin', 'cos']):
-        for table, argsort_pix, table_engine in zip(
-                [table_l, table_s], [argsort_pix_l, argsort_pix_s],
-                [table_engine_l, table_engine_s]):
-            for angle in ['ra', 'dec']:
-                table_engine[f'{f_name} {angle}'] =\
-                    np.ascontiguousarray(f(in_degrees(table[angle].quantity))[
-                        argsort_pix])
+        for angle in ['ra', 'dec']:
+            table_engine_l[f'{f_name} {angle}'] = np.ascontiguousarray(
+                f(in_degrees(table_l[angle].quantity))[argsort_pix_l])
+            if not cached:
+                table_engine_s[f'{f_name} {angle}'] = np.ascontiguousarray(
+                    f(in_degrees(table_s[angle].quantity))[argsort_pix_s])
 
-    for key in ['z', 'z_l_max', 'w', 'e_1', 'e_2', 'm', 'e_rms', 'm_sel',
-                'R_11', 'R_22', 'R_12', 'R_21']:
-        if key in table_s.colnames:
-            table_engine_s[key] = np.ascontiguousarray(
-                table_s[key][argsort_pix_s], dtype=np.float64)
+    if not cached:
+        for key in ['z', 'z_l_max', 'w', 'e_1', 'e_2', 'm', 'e_rms', 'm_sel',
+                    'R_11', 'R_22', 'R_12', 'R_21']:
+            if key in table_s.colnames:
+                table_engine_s[key] = np.ascontiguousarray(
+                    table_s[key][argsort_pix_s], dtype=np.float64)
 
-    if 'z_bin' in table_s.colnames:
-        table_engine_s['z_bin'] = np.ascontiguousarray(
-            table_s['z_bin'][argsort_pix_s], dtype=int)
+        if 'z_bin' in table_s.colnames:
+            table_engine_s['z_bin'] = np.ascontiguousarray(
+                table_s['z_bin'][argsort_pix_s], dtype=int)
 
-    if 'z_l_max' not in table_engine_s:
-        if table_n is not None:
-            table_engine_s['z_l_max'] = np.ascontiguousarray(
-                np.repeat(np.finfo(np.float64).max, len(table_s)),
-                dtype=np.float64)
-        else:
-            table_engine_s['z_l_max'] = table_engine_s['z']
+        if 'z_l_max' not in table_engine_s:
+            if table_n is not None:
+                table_engine_s['z_l_max'] = np.ascontiguousarray(
+                    np.repeat(np.finfo(np.float64).max, len(table_s)),
+                    dtype=np.float64)
+            else:
+                table_engine_s['z_l_max'] = table_engine_s['z']
 
-    for table, argsort_pix, table_engine in zip(
-            [table_l, table_s], [argsort_pix_l, argsort_pix_s],
-            [table_engine_l, table_engine_s]):
+    for table, table_engine in zip(
+            [table_l] + ([] if cached else [table_s]),
+            [table_engine_l] + ([] if cached else [table_engine_s])):
         if 'z' in table.colnames:
             table_engine['d_com'] = np.ascontiguousarray(
                 interpolate_over_redshift(
@@ -387,10 +398,16 @@ def precompute(
     # multiprocessing arrays.
     if n_jobs > 1:
         chord_sq_bins = get_raw_multiprocessing_array(chord_sq_bins)
-        for table_engine in [table_engine_l, table_engine_s, table_engine_r]:
+        for table_engine in [table_engine_l, table_engine_r] + (
+                [] if cached else [table_engine_s]):
             for key in table_engine:
                 table_engine[key] = get_raw_multiprocessing_array(
                     table_engine[key])
+
+    if table_n is None and not cached:
+        _SOURCE_CACHE.clear()
+        _SOURCE_CACHE.update(table_s=table_s, key=source_key,
+                             engine=(pix_s, n_pix_s, table_engine_s))
 
     # Create a queue that holds all the pixels containing lenses.
     q = queue.Queue() if n_jobs == 1 else mp.Queue()
