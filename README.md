@@ -1,3 +1,5 @@
+<div align="center">
+
 ![logo](https://raw.githubusercontent.com/johannesulf/dsigma/main/docs/dsigma.png)
 
 [![Unit Testing Status](https://img.shields.io/github/actions/workflow/status/johannesulf/dsigma/tests.yml?branch=main&label=tests)](https://github.com/johannesulf/dsigma/actions)
@@ -7,6 +9,10 @@
 ![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fjohannesulf%2Fdsigma%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)
 ![PyPI - Version](https://img.shields.io/pypi/v/dsigma)
 [![License: MIT](https://img.shields.io/github/license/johannesulf/dsigma?color=blue)](https://raw.githubusercontent.com/johannesulf/dsigma/main/LICENSE)
+[![DOI](https://img.shields.io/badge/doi-10.5281%2Fzenodo.20378642-blue
+)](https://doi.org/10.5281/zenodo.20378642)
+
+</div>
 
 ``dsigma`` is an easy-to-use Python package for measuring gravitational galaxy-galaxy lensing. Using a lensing catalog, it estimates excess surface density around a population of lenses, such as galaxies in the Sloan Digital Sky Survey or the Baryon Oscillation Spectroscopic Survey. It has a flexible API and can utilize data from, DECADE, the Dark Energy Survey (DES), the Kilo-Degree Survey (KiDS), and the Hyper Suprime-Cam (HSC) lensing surveys, among others. With core computations written in C, ``dsigma`` is very fast. Additionally, ``dsigma`` provides out-of-the-box support for estimating covariances with jackknife resampling and calculating various summary statistics.
 
@@ -19,7 +25,7 @@
 
 ## Installation
 
-The easiest way to install ``dsigma`` is to use ``pip`` to install the latest stable version from the Python Package Index (PyPI).
+The easiest way to install ``dsigma`` is to use ``pip`` for the latest stable version from the Python Package Index (PyPI).
 
     pip install dsigma
 
@@ -41,4 +47,4 @@ Documentation for ``dsigma`` with concept introductions, examples, and API docum
 
 ## Generative AI
 
-Generative AI was used to search for potential bugs in the code and to improve the documentation by finding typos and suggesting minor rewrites. No part of the ``dsigma`` code itself was written entirely or in parts by AI.
+Generative AI was used to search for potential bugs in the code and to improve the documentation by finding typos and suggesting minor rewrites. The core developers did not use AI to write any part of the ``dsigma`` code itself. Code contributions from other developers may use AI, as described in the respective pull requests, and are carefully vetted by the core developers.

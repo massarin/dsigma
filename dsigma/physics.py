@@ -140,7 +140,7 @@ def effective_critical_surface_density(
         return 1.0 / sigma_crit_eff_inv
 
 
-def _to_camb(cosmology, sigma_8, n_s, z):
+def _to_camb(cosmology, sigma_8, n_s, z, k_max=1e3):
     r"""Convert an astropy cosmology object into a CAMB result object.
 
     Parameters
@@ -150,9 +150,12 @@ def _to_camb(cosmology, sigma_8, n_s, z):
     sigma_8 : float
         Scale of fluctuations at :math:`8 h^{-1} \, \mathrm{Mpc}`.
     n_s : float
-        Primordial power spectrum index. Default is 0.96.
+        Primordial power spectrum index.
     z : numpy.ndarray
         Redshifts for which to compute the power spectrum.
+    k_max : float, optional
+        The maximum wavenumber (in :math:`\mathrm{Mpc}^{-1}`) beyond which the
+        power spectrum is assumed to be 0. Default is 1000.
 
     Returns
     -------
@@ -162,7 +165,7 @@ def _to_camb(cosmology, sigma_8, n_s, z):
 
     Raises
     ------
-    ValueError
+    TypeError
         If cosmology is not an instance of ``astropy.cosmology.FlatLambdaCDM``.
     ImportError
         If ``camb`` is not installed.
@@ -170,7 +173,7 @@ def _to_camb(cosmology, sigma_8, n_s, z):
     """
     if not isinstance(cosmology, FlatLambdaCDM):
         msg = "Cosmology must be instance of astropy.cosmology.FlatLambdaCDM."
-        raise ValueError(msg)
+        raise TypeError(msg)
 
     try:
         import camb
@@ -184,26 +187,28 @@ def _to_camb(cosmology, sigma_8, n_s, z):
             cosmology.m_nu.to(u.eV).value)
 
     # Note that astropy considers all neutrinos for Onu but CAMB only takes
-    # into account massive neutrinos for "nu". That's why we use the
-    # Onu h^2 = sum m_nu / 93.14 eV formula.
+    # into account massive neutrinos for "nu".
     pars = camb.set_params(
         H0=100 * h, omch2=(cosmology.Om0 - cosmology.Ob0) * h**2,
-        ombh2=cosmology.Ob0 * h**2, omnuh2=np.sum(m_nu) / 93.14,
+        ombh2=cosmology.Ob0 * h**2,
+        omnuh2=(
+            cosmology.Onu0 - 0.227107318 * cosmology.Ogamma0 * cosmology.Neff *
+            np.mean(m_nu == 0)) * h**2,
         TCMB=cosmology.Tcmb0.to(u.K).value,
-        num_nu_massless=cosmology.Neff - np.sum(m_nu > 0),
+        num_nu_massless=cosmology.Neff * np.mean(m_nu == 0),
         num_nu_massive=np.sum(m_nu > 0),
         nu_mass_eigenstates=len(np.unique(m_nu[m_nu > 0])),
         nu_mass_numbers=np.unique(m_nu[m_nu > 0], return_counts=True)[1],
-        nu_mass_degeneracies=np.unique(m_nu[m_nu > 0]),
-        ns=n_s, As=a_s, NonLinear='NonLinear_pk', kmax=1000.0, redshifts=z)
+        nu_mass_fractions=[np.average(m_nu == m_nu_i, weights=m_nu) for
+                           m_nu_i in np.unique(m_nu[m_nu > 0])],
+        nu_mass_degeneracies=cosmology.Neff / len(m_nu) * np.unique(
+            m_nu[m_nu > 0], return_counts=True)[1],
+        ns=n_s, As=a_s, NonLinear='NonLinear_pk', kmax=k_max, redshifts=z)
 
     results = camb.get_results(pars)
-
-    # Iterate to get the sigma_8 value correct.
-    while np.abs(np.log(sigma_8 / results.get_sigma8_0())) > 1e-9:
-        a_s *= (sigma_8 / results.get_sigma8_0())**2
-        pars.InitPower.set_params(ns=n_s, As=a_s)
-        results = camb.get_results(pars)
+    a_s *= (sigma_8 / results.get_sigma8_0())**2
+    pars.InitPower.set_params(ns=n_s, As=a_s)
+    results = camb.get_results(pars)
 
     return results
 
@@ -291,7 +296,7 @@ def lens_magnification_shear_bias(
         should never fall below `bessel_function_zeros`. Default is 100.
     k_max : float, optional
         The maximum wavenumber (in :math:`\mathrm{Mpc}^{-1}`) beyond which the
-        power spectrum is assumed to be 0. Default is 100.
+        power spectrum is assumed to be 0. Default is 1000.
 
     Returns
     -------
@@ -319,7 +324,7 @@ def lens_magnification_shear_bias(
                 cosmology.angular_diameter_distance_z1z2(z_u, z_s)[idx] /
                 cosmology.angular_diameter_distance(z_s) *
                 np.where(k > k_max, 0, np.array(
-                    [p(z_i, k_i) for z_i, k_i in zip(z, k)])))
+                    [np.squeeze(p(z_i, k_i)) for z_i, k_i in zip(z, k)])))
 
     ell_max = np.amax(jn_zeros(2, bessel_function_zeros)) / theta
 

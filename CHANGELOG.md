@@ -4,6 +4,23 @@ Notable changes to dsigma will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-07-28
+
+### Added
+
+- `dsigma.jackknife_resampling` now has the keyword argument `return_samples` to return the individual jackknife samples. Thanks to @joezuntz.
+
+### Fixed
+
+- For newer version of `scipy`, the lens magnification estimate was incorrect.
+- For the lens magnification calculation, the neutrino properties should now be incorporated correctly. This error should have had very little overall impact on the lens magnification estimate since $\sigma_8$ was always matched.
+
+## [1.2.1] - 2026-06-15
+
+### Fixed
+
+- A logical bug in the precompute engine could lead to many lens-source pairs not being found if the maximum search radius was very small. Thanks to Nicolo Massari (@massarin) for finding and fixing this bug.
+
 ## [1.2.0] - 2026-05-25
 
 ### Added
