@@ -12,3 +12,4 @@ tutorial/*
 !tutorial/*.csv
 !tutorial/*.ecsv
 *.ipynb_checkpoints
+.venv
