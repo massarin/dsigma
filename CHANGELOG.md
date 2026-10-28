@@ -4,6 +4,18 @@ Notable changes to dsigma will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The power spectrum parameters $\sigma_8$ and $n_s$ are now passed to `dsigma.physics.lens_magnification_bias` and `dsigma.stacking.lens_magnification_bias` via the cosmology's metadata instead of explicit keyword arguments. That aligns with how astropy's pre-defined cosmologies store them and allows users to perform lens magnification calculations for pre-defined cosmologies such as ``Planck18`` without having to look up the values for $\sigma_8$ and $n_s$.
+
+## [1.2.3] - 2026-10-09
+
+### Fixed
+
+- As described in #24, versions 1.2.0, 1.2.1, and 1.2.2 had an incorrect little-h conversion for the effective critical surface density. As a result, excess surface densities are multiplied by an incorrect factor $H_0 / H_{0, \rm Planck15}$. This is now fixed.
+
 ## [1.2.2] - 2026-07-28
 
 ### Added
